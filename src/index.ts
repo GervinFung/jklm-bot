@@ -89,6 +89,26 @@ const ensureCanBeStarted = async ({
     }
 };
 
+const randomizeDelay = ({
+    charactersCount,
+}: Readonly<{
+    charactersCount: number;
+}>) => {
+    const isLessThanFiveteen = charactersCount < 15;
+    const boundConfig = {
+        lower: isLessThanFiveteen ? 80 : 90,
+        upper: isLessThanFiveteen ? 90 : 100,
+    } as const;
+    const delays = Array.from(
+        {
+            length: 5,
+        },
+        (_, index) =>
+            (Math.random() % 2 ? boundConfig.lower : boundConfig.upper) + index
+    );
+    return delays[Math.floor(Math.random() * delays.length)];
+};
+
 const enterWord = async ({
     word,
     page,
@@ -101,12 +121,17 @@ const enterWord = async ({
     parent: ReadonlyArray<string>;
 }>) => {
     if (word) {
+        const delay = randomizeDelay({
+            charactersCount: word.length,
+        });
         await frame.type(
             formQuery(parent.concat(['form', 'input.styled'])),
             word,
-            {
-                delay: 50,
-            }
+            !delay
+                ? undefined
+                : {
+                      delay,
+                  }
         );
         await page.keyboard.press('Enter');
     }
@@ -155,7 +180,7 @@ const main = async () => {
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
-            await waitFor(0.5);
+            await waitFor(0.75);
             if (
                 await frame.$eval(
                     formQuery(queriesUtil.selfTurnParent),
