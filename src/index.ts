@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import * as puppeteer from 'puppeteer';
 import { isNonNullable } from './guard';
 import { formQuery, waitFor } from './util';
 import createBrowser from './browser';
@@ -21,13 +21,12 @@ const queries = () => {
     } as const;
 };
 
-const setUserNameAndJoin = async <S extends string>({
-    name,
-    page,
-}: Readonly<{
-    name: S;
-    page: puppeteer.Page;
-}>) => {
+const setUserNameAndJoin = async <S extends string>(
+    params: Readonly<{
+        name: S;
+        page: puppeteer.Page;
+    }>
+) => {
     const parent = [
         'body',
         'div.pages',
@@ -35,50 +34,54 @@ const setUserNameAndJoin = async <S extends string>({
         'form',
         'div.line',
     ];
-    await page.waitForSelector(formQuery(parent));
+    await params.page.waitForSelector(formQuery(parent));
     await waitFor(2);
-    await page.type(formQuery(parent.concat('input')), name);
-    await page.click(formQuery(parent.concat('button')));
+    await params.page.type(formQuery(parent.concat('input')), params.name);
+    await params.page.click(formQuery(parent.concat('button')));
 };
 
-const getIFrame = async ({
-    page,
-}: Readonly<{
-    page: puppeteer.Page;
-}>) => {
-    await page.waitForSelector('iframe');
-    const frame = await (await page.$('iframe'))?.contentFrame();
+const getIFrame = async (
+    params: Readonly<{
+        page: puppeteer.Page;
+    }>
+) => {
+    await params.page.waitForSelector('iframe');
+    const frame = await (await params.page.$('iframe'))?.contentFrame();
     if (frame) {
         return frame;
     }
     throw new Error('There is no iframe');
 };
 
-const ensureJoinable = async ({
-    frame,
-}: Readonly<{
-    frame: puppeteer.Frame;
-}>) => {
+const ensureJoinable = async (
+    params: Readonly<{
+        frame: puppeteer.Frame;
+    }>
+) => {
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        const checkIsJoinable = await frame.$eval('.seating', (element) =>
-            element.getAttribute('hidden')
+        const checkIsJoinable = await params.frame.$eval(
+            '.seating',
+            (element) => element.getAttribute('hidden')
         );
         if (!isNonNullable(checkIsJoinable)) {
-            return await frame.click('.joinRound');
+            return await params.frame.click('.joinRound');
         }
     }
 };
 
-const ensureCanBeStarted = async ({
-    frame,
-}: Readonly<{
-    frame: puppeteer.Frame;
-}>) => {
+const ensureCanBeStarted = async (
+    params: Readonly<{
+        frame: puppeteer.Frame;
+    }>
+) => {
     // eslint-disable-next-line no-constant-condition
     while (true) {
         const status =
-            (await frame.$eval('.status', (el) => el.textContent)) ?? '';
+            (await params.frame.$eval(
+                '.status',
+                (element) => element.textContent
+            )) ?? '';
         if (!status.toLowerCase().includes('round will start in')) {
             continue;
         }
@@ -89,12 +92,12 @@ const ensureCanBeStarted = async ({
     }
 };
 
-const randomizeDelay = ({
-    charactersCount,
-}: Readonly<{
-    charactersCount: number;
-}>) => {
-    const isLessThanFiveteen = charactersCount < 15;
+const randomizeDelay = (
+    params: Readonly<{
+        charactersCount: number;
+    }>
+) => {
+    const isLessThanFiveteen = params.charactersCount < 15;
     const boundConfig = {
         lower: isLessThanFiveteen ? 80 : 90,
         upper: isLessThanFiveteen ? 90 : 100,
@@ -109,31 +112,28 @@ const randomizeDelay = ({
     return delays[Math.floor(Math.random() * delays.length)];
 };
 
-const enterWord = async ({
-    word,
-    page,
-    frame,
-    parent,
-}: Readonly<{
-    page: puppeteer.Page;
-    frame: puppeteer.Frame;
-    word: string | undefined;
-    parent: ReadonlyArray<string>;
-}>) => {
-    if (word) {
+const enterWord = async (
+    params: Readonly<{
+        page: puppeteer.Page;
+        frame: puppeteer.Frame;
+        word: string | undefined;
+        parent: ReadonlyArray<string>;
+    }>
+) => {
+    if (params.word) {
         const delay = randomizeDelay({
-            charactersCount: word.length,
+            charactersCount: params.word.length,
         });
-        await frame.type(
-            formQuery(parent.concat(['form', 'input.styled'])),
-            word,
+        await params.frame.type(
+            formQuery(params.parent.concat(['form', 'input.styled'])),
+            params.word,
             !delay
                 ? undefined
                 : {
                       delay,
                   }
         );
-        await page.keyboard.press('Enter');
+        await params.page.keyboard.press('Enter');
     }
 };
 
@@ -161,6 +161,8 @@ const main = async () => {
             page,
             name: config.user.name,
         });
+
+        await waitFor(5);
 
         const frame = await getIFrame({
             page,
